@@ -1,0 +1,33 @@
+# Virtual environment
+venv/
+.venv/
+env/
+env.bak/
+ENV/
+
+# Кэш и временные файлы
+*.pyc
+__pycache__/
+
+# Файлы среды и настройки IDE
+.env
+.vscode/
+.idea/
+
+# Зависимости и пакеты
+*.egg-info/
+dist/
+build/
+lib/
+bin/
+include/
+requirements.txt
+
+# Логи и промежуточные результаты
+*.log
+*.swp
+*.swo
+*.bak
+test*.py
+
+# Прочие файлы и папки, которые вы хотите исключить
