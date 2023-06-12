@@ -83,10 +83,10 @@ class OSC:
 
     def update_txt_blocks(self):
         self.handle_fps(self.txt_blocks['fps'])
-        # tmr = 'timer_chaos' if self._is_chaos_decorated else 'timer_sync'
-        # self.handle_timer(self.txt_blocks[tmr], self.start_time)
-        # if self._is_restart:
-        #     self.reset_timers()
+        tmr = 'timer_chaos' if self._is_chaos_decorated else 'timer_sync'
+        self.handle_timer(self.txt_blocks[tmr], self.start_time)
+        if self._is_restart:
+            self.reset_timers()
 
     def decorate(self):
         style_name = 'synced' if not self._is_chaos else 'chaotic'
