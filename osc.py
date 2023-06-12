@@ -12,36 +12,32 @@ plt.rcParams['toolbar'] = 'None'
 class OSC:
     def __init__(self, data, figsize=(20, 5)):
         self.animation = None
+        self.data = None
         self.ADC = data
-        self.INTERVAL = 60          # frame animation interval in millisec
+        self.INTERVAL = 2000          # frame animation interval in millisec
         self.SCROLL_TIME = 64
+        self.MAX_TRIM = self.SCROLL_TIME # to trim dataset
         self.THRESHOLD = 0.5
-        self.CHAOS_PERF_TIME = 4    # time of chaotic performance in sec.
-        self.RESTART_TIME = 2       # time of restart performance in sec.
+        self.CHAOS_PERF_TIME = 2    # time of chaotic performance in sec.
+        self.RESTART_TIME = 1       # time of restart performance in sec.
         self.BACK = matplotlib.get_backend()
 
         # Initialize the figure and axis
         self.fig, self.ax = plt.subplots(figsize=figsize)
         self.fig.set_facecolor('black')
-        self.fig.canvas.manager.set_window_title('Chaotic System 1')
         self.ax.set_facecolor('black')
         self.ax.spines[:].set_color('black')
         self.ax.tick_params(axis='x', colors='white', labelsize=6)
         self.ax.tick_params(axis='y', colors='white', labelsize=6)
+        self.fig.canvas.manager.set_window_title('Chaotic System 1')
 
         # Set the limits of the x and y axes to zoom out
         self.ax.set_ylim(-0.5, 3)
-        plt.subplots_adjust(left=0.15, right=0.96)
+        plt.subplots_adjust(left=0.12, bottom=0.04, right=0.96, top=0.98)
 
-        # Initialize the lines
         self.LINEW = 2
-        self.line1, = self.ax.plot([], [], linewidth=self.LINEW, label='Generator A')
-        self.line2, = self.ax.plot([], [], linewidth=self.LINEW, label='Generator B')
 
-        # Legend, text, labels and timers
-        self.legend = plt.legend(loc='center right', bbox_to_anchor=(-0.05, 0.96),
-                                 facecolor='black', edgecolor='black', labelcolor='white')
-
+        # init text, labels and timers
         self.txt_blocks = {}                # dict for text blocks to change them later
         self.timers_default = '00:00:000'
         self.text_prop = HANDLER.text_prop          # from config
@@ -61,8 +57,7 @@ class OSC:
         horiz_alg = blck_p.get('horizontalalignment', 'right')
         color = blck_p.get('color', 'white')
 
-        txt_block = self.fig.text(
-            padding_left, padding_bottom, inner_txt, ha=horiz_alg, color=color, fontsize=fsize, **txt_p)
+        txt_block = self.fig.text(padding_left, padding_bottom, inner_txt, ha=horiz_alg, color=color, fontsize=fsize, **txt_p)
         self.txt_blocks[block_name] = txt_block # save dict with blocks
         return txt_block
 
@@ -82,11 +77,13 @@ class OSC:
         self.txt_blocks['timer_sync'].set_text(self.timers_default)
 
     def update_txt_blocks(self):
+        if not self.animation:
+            return False
         self.handle_fps(self.txt_blocks['fps'])
-        # tmr = 'timer_chaos' if self._is_chaos_decorated else 'timer_sync'
-        # self.handle_timer(self.txt_blocks[tmr], self.start_time)
-        # if self._is_restart:
-        #     self.reset_timers()
+        tmr = 'timer_chaos' if self._is_chaos_decorated else 'timer_sync'
+        self.handle_timer(self.txt_blocks[tmr], self.start_time)
+        if self._is_restart:
+            self.reset_timers()
 
     def decorate(self):
         style_name = 'synced' if not self._is_chaos else 'chaotic'
@@ -112,18 +109,18 @@ class OSC:
         lim_x_right = min(self._frame + self.SCROLL_TIME, self._frame + self.SCROLL_TIME / 5)
         return self.ax.set_xlim(lim_x_left, lim_x_right)
 
-    def trim_data(self):
-        if len(self.data) > self.SCROLL_TIME:
-            self.data = self.data[1:self.SCROLL_TIME + 1] # faster
-
     def check_chaos(self, v1, v2):
         if not self._is_chaos and abs(v1 - v2) > self.THRESHOLD:
             self._is_chaos = True
 
+    def trim_data(self):
+        if len(self.data) > self.MAX_TRIM:
+            self.data = self.data[1:self.MAX_TRIM + 1] # faster
+
     def get_adc_vals(self):
         # return self.ADC.get_vals()
         val1 = np.random.uniform(0, 2.5)
-        if self._frame > 55:
+        if self._frame and self._frame > 32:
             val2 = np.random.uniform(0, 2.5)
         else:
             val2 = val1 - 0.15
@@ -131,12 +128,14 @@ class OSC:
         return val1, val2
 
     def clear_data(self):
-        self.line1.set_data([], [])
-        self.line2.set_data([], [])
+        self.line1.remove()
+        self.line2.remove()
+        self.animation = None
+        self._C = 0
 
     def update_data(self):
         upd_vals = np.array([[self._frame, *self.get_adc_vals()]])
-        self.data = np.append(self.data, upd_vals, axis=0)
+        self.data = np.append(self.data, upd_vals, axis=0) if self._frame > 0 else upd_vals
         self.trim_data()
         self.update_txt_blocks()
         return self.data[:, 0], self.data[:, 1], self.data[:, 2]
@@ -152,23 +151,35 @@ class OSC:
         self.chaos_enabler() # check if chaos started - enable decoration var
         return self.line1, self.line2
 
-    def osc_init(self):
+    def init_OSC(self):
         self._frame = None
         self._is_chaos = False
         self._is_chaos_decorated = False
         self._is_restart = False
-        self.data = np.empty((0, 3)) # np array to collect data x, y1, y2
+
+        x, y1, y2 = self.update_data()
+        # self.data = np.empty((0, 3)) # np array to collect data x, y1, y2
+        
+        self.line1, = self.ax.plot(x, y1, linewidth=self.LINEW, label='Generator A')
+        self.line2, = self.ax.plot(x, y2, linewidth=self.LINEW, label='Generator B')
+
+        self.legend = plt.legend(loc='center right', bbox_to_anchor=(-0.04, 0.9),
+                            facecolor='black', edgecolor='black', labelcolor='white')
+
         self.start_time = time.monotonic()
-        self.START_TIME = time.monotonic()
+        self.START_TIME = self.start_time
         self.decorate()
         self.handle_perfdata(self.txt_blocks['perf_data'])
 
     def start_OSC(self):
-        self.animation = animation.FuncAnimation(self.fig, self.update_frame,
-                                                 init_func=self.osc_init,
+        if self.animation is None:
+            self.init_OSC()
+            self.animation = animation.FuncAnimation(self.fig, self.update_frame,
+                                                #  init_func=self.init_OSC,
                                                  interval=self.INTERVAL, 
-                                                 save_count=0, 
-                                                 blit=False)
+                                                 save_count=0, repeat=False, 
+                                                #  blit=True,
+                                                 cache_frame_data=False)
 
     def restart_OSC(self):
         self.animation.event_source.stop()
